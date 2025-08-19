@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -8,6 +8,8 @@ import { Separator } from '@/components/ui/separator';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Slider } from '@/components/ui/slider';
 import Icon from '@/components/ui/icon';
 
 interface LicensePlate {
@@ -19,11 +21,16 @@ interface LicensePlate {
   phone: string;
   description: string;
   featured?: boolean;
+  image?: string;
 }
 
 const Index = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTab, setSelectedTab] = useState('home');
+  const [favorites, setFavorites] = useState<string[]>([]);
+  const [priceRange, setPriceRange] = useState([0, 500000]);
+  const [selectedRegion, setSelectedRegion] = useState<string>('all');
+  const [showFilters, setShowFilters] = useState(false);
   const [listings] = useState<LicensePlate[]>([
     {
       id: '1',
@@ -33,7 +40,8 @@ const Index = () => {
       seller: 'Иван Петров',
       phone: '+7 (999) 123-45-67',
       description: 'Красивый номер на авто премиум класса',
-      featured: true
+      featured: true,
+      image: '/img/7728926c-b245-4a22-907a-b3342e6e0cdc.jpg'
     },
     {
       id: '2',
@@ -43,6 +51,7 @@ const Index = () => {
       seller: 'Мария Сидорова',
       phone: '+7 (999) 234-56-78',
       description: 'Эксклюзивный номер для коллекционера',
+      image: '/img/8553e8db-4c4e-4788-a4dc-17bd7f082212.jpg'
     },
     {
       id: '3',
@@ -52,6 +61,7 @@ const Index = () => {
       seller: 'Алексей Иванов',
       phone: '+7 (999) 345-67-89',
       description: 'Хороший номер по доступной цене',
+      image: '/img/357e84cf-736c-4206-9690-3b17f8b5f99d.jpg'
     }
   ]);
 
@@ -64,10 +74,37 @@ const Index = () => {
     description: ''
   });
 
-  const filteredListings = listings.filter(listing =>
-    listing.number.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    listing.region.includes(searchQuery)
-  );
+  // Load favorites from localStorage on component mount
+  useEffect(() => {
+    const storedFavorites = localStorage.getItem('favorites');
+    if (storedFavorites) {
+      setFavorites(JSON.parse(storedFavorites));
+    }
+  }, []);
+
+  // Save favorites to localStorage whenever it changes
+  useEffect(() => {
+    localStorage.setItem('favorites', JSON.stringify(favorites));
+  }, [favorites]);
+
+  const toggleFavorite = (id: string) => {
+    setFavorites(prev => 
+      prev.includes(id) 
+        ? prev.filter(fav => fav !== id)
+        : [...prev, id]
+    );
+  };
+
+  const regions = Array.from(new Set(listings.map(listing => listing.region)));
+
+  const filteredListings = listings.filter(listing => {
+    const matchesSearch = listing.number.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                         listing.region.includes(searchQuery);
+    const matchesPrice = listing.price >= priceRange[0] && listing.price <= priceRange[1];
+    const matchesRegion = selectedRegion === 'all' || listing.region === selectedRegion;
+    
+    return matchesSearch && matchesPrice && matchesRegion;
+  });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -94,7 +131,7 @@ const Index = () => {
         </p>
         
         {/* Search Bar */}
-        <div className="flex gap-2 max-w-md mx-auto">
+        <div className="flex gap-2 max-w-md mx-auto mb-4">
           <div className="relative flex-1">
             <Icon name="Search" className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
             <Input
@@ -104,18 +141,97 @@ const Index = () => {
               className="pl-10"
             />
           </div>
-          <Button>
-            <Icon name="Search" size={16} />
+          <Button onClick={() => setShowFilters(!showFilters)} variant="outline">
+            <Icon name="Filter" size={16} />
           </Button>
         </div>
+
+        {/* Filters */}
+        {showFilters && (
+          <div className="bg-white p-4 rounded-lg border shadow-sm max-w-2xl mx-auto space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label className="text-sm font-medium mb-2 block">Цена (₽)</Label>
+                <div className="px-2">
+                  <Slider
+                    value={priceRange}
+                    onValueChange={setPriceRange}
+                    max={500000}
+                    min={0}
+                    step={5000}
+                    className="mb-2"
+                  />
+                  <div className="flex justify-between text-xs text-gray-500">
+                    <span>{priceRange[0].toLocaleString()}</span>
+                    <span>{priceRange[1].toLocaleString()}</span>
+                  </div>
+                </div>
+              </div>
+              <div>
+                <Label className="text-sm font-medium mb-2 block">Регион</Label>
+                <Select value={selectedRegion} onValueChange={setSelectedRegion}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Все регионы" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Все регионы</SelectItem>
+                    {regions.map(region => (
+                      <SelectItem key={region} value={region}>{region}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => {
+                  setPriceRange([0, 500000]);
+                  setSelectedRegion('all');
+                  setSearchQuery('');
+                }}
+              >
+                Сбросить фильтры
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Featured Listings */}
+      {/* Listings */}
       <div>
-        <h2 className="font-inter text-2xl font-semibold mb-6">Рекомендуемые номера</h2>
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="font-inter text-2xl font-semibold">
+            {selectedTab === 'favorites' ? 'Избранные номера' : 'Рекомендуемые номера'}
+            <span className="text-sm text-gray-500 ml-2">({filteredListings.length})</span>
+          </h2>
+        </div>
+        
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredListings.map((listing) => (
-            <Card key={listing.id} className="hover:shadow-lg transition-shadow">
+            <Card key={listing.id} className="hover:shadow-lg transition-shadow overflow-hidden">
+              {listing.image && (
+                <div className="relative h-48 bg-gray-100">
+                  <img 
+                    src={listing.image} 
+                    alt={`${listing.number} ${listing.region}`}
+                    className="w-full h-full object-cover"
+                  />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className={`absolute top-2 right-2 p-2 ${favorites.includes(listing.id) ? 'bg-red-50 border-red-200' : 'bg-white/90'}`}
+                    onClick={() => toggleFavorite(listing.id)}
+                  >
+                    <Icon 
+                      name="Heart" 
+                      size={16} 
+                      className={favorites.includes(listing.id) ? 'text-red-500 fill-current' : 'text-gray-600'}
+                    />
+                  </Button>
+                </div>
+              )}
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
                   <CardTitle className="font-inter text-xl flex items-center gap-2">
@@ -150,11 +266,36 @@ const Index = () => {
                       {listing.phone}
                     </div>
                   </div>
+                  <div className="flex gap-2 pt-2">
+                    <Button className="flex-1" size="sm">
+                      <Icon name="Phone" size={14} className="mr-1" />
+                      Позвонить
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => toggleFavorite(listing.id)}
+                    >
+                      <Icon 
+                        name="Heart" 
+                        size={14} 
+                        className={favorites.includes(listing.id) ? 'text-red-500 fill-current' : ''}
+                      />
+                    </Button>
+                  </div>
                 </div>
               </CardContent>
             </Card>
           ))}
         </div>
+        
+        {filteredListings.length === 0 && (
+          <div className="text-center py-12">
+            <Icon name="Search" size={48} className="mx-auto text-gray-300 mb-4" />
+            <h3 className="font-inter text-lg font-medium text-gray-900 mb-2">Номера не найдены</h3>
+            <p className="font-opensans text-gray-500">Попробуйте изменить параметры поиска</p>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -372,7 +513,7 @@ const Index = () => {
       <nav className="bg-white border-b">
         <div className="container mx-auto px-4">
           <Tabs value={selectedTab} onValueChange={setSelectedTab}>
-            <TabsList className="grid w-full grid-cols-4 max-w-md mx-auto lg:mx-0">
+            <TabsList className="grid w-full grid-cols-5 max-w-lg mx-auto lg:mx-0">
               <TabsTrigger value="home" className="flex items-center gap-2">
                 <Icon name="Home" size={16} />
                 Главная
@@ -380,6 +521,10 @@ const Index = () => {
               <TabsTrigger value="search" className="flex items-center gap-2">
                 <Icon name="Search" size={16} />
                 Поиск
+              </TabsTrigger>
+              <TabsTrigger value="favorites" className="flex items-center gap-2">
+                <Icon name="Heart" size={16} />
+                Избранное
               </TabsTrigger>
               <TabsTrigger value="add" className="flex items-center gap-2">
                 <Icon name="Plus" size={16} />
@@ -402,6 +547,96 @@ const Index = () => {
           </TabsContent>
           <TabsContent value="search">
             <HomePage />
+          </TabsContent>
+          <TabsContent value="favorites">
+            <div className="space-y-8">
+              <div className="text-center py-8">
+                <Icon name="Heart" size={48} className="mx-auto text-red-300 mb-4" />
+                <h1 className="font-inter text-3xl font-bold text-gray-900 mb-2">
+                  Избранные номера
+                </h1>
+                <p className="font-opensans text-gray-600">
+                  {favorites.length === 0 
+                    ? 'Вы ещё не добавили номера в избранное'
+                    : `У вас ${favorites.length} избранных номеров`}
+                </p>
+              </div>
+              
+              {favorites.length > 0 && (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {listings.filter(listing => favorites.includes(listing.id)).map((listing) => (
+                    <Card key={listing.id} className="hover:shadow-lg transition-shadow overflow-hidden">
+                      {listing.image && (
+                        <div className="relative h-48 bg-gray-100">
+                          <img 
+                            src={listing.image} 
+                            alt={`${listing.number} ${listing.region}`}
+                            className="w-full h-full object-cover"
+                          />
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="absolute top-2 right-2 p-2 bg-red-50 border-red-200"
+                            onClick={() => toggleFavorite(listing.id)}
+                          >
+                            <Icon name="Heart" size={16} className="text-red-500 fill-current" />
+                          </Button>
+                        </div>
+                      )}
+                      <CardHeader className="pb-3">
+                        <div className="flex items-center justify-between">
+                          <CardTitle className="font-inter text-xl flex items-center gap-2">
+                            <div className="bg-white border-2 border-gray-800 px-3 py-1 rounded text-base font-bold">
+                              {listing.number} {listing.region}
+                            </div>
+                          </CardTitle>
+                          {listing.featured && (
+                            <Badge className="bg-yellow-100 text-yellow-800">
+                              <Icon name="Star" size={14} className="mr-1" />
+                              VIP
+                            </Badge>
+                          )}
+                        </div>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-3">
+                          <div className="text-2xl font-bold text-primary">
+                            {listing.price.toLocaleString()} ₽
+                          </div>
+                          <p className="font-opensans text-gray-600 text-sm">
+                            {listing.description}
+                          </p>
+                          <Separator />
+                          <div className="space-y-1 text-sm text-gray-500">
+                            <div className="flex items-center gap-2">
+                              <Icon name="User" size={14} />
+                              {listing.seller}
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Icon name="Phone" size={14} />
+                              {listing.phone}
+                            </div>
+                          </div>
+                          <div className="flex gap-2 pt-2">
+                            <Button className="flex-1" size="sm">
+                              <Icon name="Phone" size={14} className="mr-1" />
+                              Позвонить
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => toggleFavorite(listing.id)}
+                            >
+                              <Icon name="Heart" size={14} className="text-red-500 fill-current" />
+                            </Button>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </div>
           </TabsContent>
           <TabsContent value="add">
             <AddListingPage />
