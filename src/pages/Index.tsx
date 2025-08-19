@@ -22,6 +22,9 @@ interface LicensePlate {
   description: string;
   featured?: boolean;
   image?: string;
+  dateAdded: string;
+  views?: number;
+  category?: string;
 }
 
 const Index = () => {
@@ -31,6 +34,10 @@ const Index = () => {
   const [priceRange, setPriceRange] = useState([0, 500000]);
   const [selectedRegion, setSelectedRegion] = useState<string>('all');
   const [showFilters, setShowFilters] = useState(false);
+  const [sortBy, setSortBy] = useState('date-desc');
+  const [selectedListing, setSelectedListing] = useState<LicensePlate | null>(null);
+  const [notifications, setNotifications] = useState<string[]>([]);
+  const [showNotifications, setShowNotifications] = useState(false);
   const [listings] = useState<LicensePlate[]>([
     {
       id: '1',
@@ -41,7 +48,10 @@ const Index = () => {
       phone: '+7 (999) 123-45-67',
       description: 'Красивый номер на авто премиум класса',
       featured: true,
-      image: '/img/7728926c-b245-4a22-907a-b3342e6e0cdc.jpg'
+      image: '/img/7728926c-b245-4a22-907a-b3342e6e0cdc.jpg',
+      dateAdded: '2024-08-19',
+      views: 127,
+      category: 'premium'
     },
     {
       id: '2',
@@ -51,7 +61,10 @@ const Index = () => {
       seller: 'Мария Сидорова',
       phone: '+7 (999) 234-56-78',
       description: 'Эксклюзивный номер для коллекционера',
-      image: '/img/8553e8db-4c4e-4788-a4dc-17bd7f082212.jpg'
+      image: '/img/8553e8db-4c4e-4788-a4dc-17bd7f082212.jpg',
+      dateAdded: '2024-08-18',
+      views: 89,
+      category: 'exclusive'
     },
     {
       id: '3',
@@ -61,7 +74,10 @@ const Index = () => {
       seller: 'Алексей Иванов',
       phone: '+7 (999) 345-67-89',
       description: 'Хороший номер по доступной цене',
-      image: '/img/357e84cf-736c-4206-9690-3b17f8b5f99d.jpg'
+      image: '/img/357e84cf-736c-4206-9690-3b17f8b5f99d.jpg',
+      dateAdded: '2024-08-17',
+      views: 56,
+      category: 'standard'
     }
   ]);
 
@@ -97,18 +113,62 @@ const Index = () => {
 
   const regions = Array.from(new Set(listings.map(listing => listing.region)));
 
-  const filteredListings = listings.filter(listing => {
-    const matchesSearch = listing.number.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         listing.region.includes(searchQuery);
-    const matchesPrice = listing.price >= priceRange[0] && listing.price <= priceRange[1];
-    const matchesRegion = selectedRegion === 'all' || listing.region === selectedRegion;
+  // Notification system
+  useEffect(() => {
+    const checkForNewListings = () => {
+      const newNotifications: string[] = [];
+      listings.forEach(listing => {
+        const addedDate = new Date(listing.dateAdded);
+        const now = new Date();
+        const hoursDiff = (now.getTime() - addedDate.getTime()) / (1000 * 3600);
+        
+        if (hoursDiff <= 24) {
+          newNotifications.push(`Новый номер ${listing.number} ${listing.region} за ${listing.price.toLocaleString()} ₽`);
+        }
+      });
+      setNotifications(newNotifications);
+    };
     
-    return matchesSearch && matchesPrice && matchesRegion;
-  });
+    checkForNewListings();
+  }, [listings]);
+
+  const getSortedListings = (listings: LicensePlate[]) => {
+    const sorted = [...listings];
+    switch (sortBy) {
+      case 'price-asc':
+        return sorted.sort((a, b) => a.price - b.price);
+      case 'price-desc':
+        return sorted.sort((a, b) => b.price - a.price);
+      case 'date-asc':
+        return sorted.sort((a, b) => new Date(a.dateAdded).getTime() - new Date(b.dateAdded).getTime());
+      case 'date-desc':
+        return sorted.sort((a, b) => new Date(b.dateAdded).getTime() - new Date(a.dateAdded).getTime());
+      case 'views-desc':
+        return sorted.sort((a, b) => (b.views || 0) - (a.views || 0));
+      default:
+        return sorted;
+    }
+  };
+
+  const filteredListings = getSortedListings(
+    listings.filter(listing => {
+      const matchesSearch = listing.number.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                           listing.region.includes(searchQuery);
+      const matchesPrice = listing.price >= priceRange[0] && listing.price <= priceRange[1];
+      const matchesRegion = selectedRegion === 'all' || listing.region === selectedRegion;
+      
+      return matchesSearch && matchesPrice && matchesRegion;
+    })
+  );
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     console.log('Новое объявление:', newListing);
+    // Add notification for new listing
+    setNotifications(prev => [
+      `Новое объявление ${newListing.number} ${newListing.region} добавлено успешно!`,
+      ...prev
+    ]);
     setNewListing({
       number: '',
       region: '',
@@ -117,6 +177,14 @@ const Index = () => {
       phone: '',
       description: ''
     });
+  };
+
+  const openDetailModal = (listing: LicensePlate) => {
+    setSelectedListing(listing);
+  };
+
+  const closeDetailModal = () => {
+    setSelectedListing(null);
   };
 
   const HomePage = () => (
@@ -144,12 +212,48 @@ const Index = () => {
           <Button onClick={() => setShowFilters(!showFilters)} variant="outline">
             <Icon name="Filter" size={16} />
           </Button>
+          <Button 
+            variant="outline" 
+            onClick={() => setShowNotifications(!showNotifications)}
+            className="relative"
+          >
+            <Icon name="Bell" size={16} />
+            {notifications.length > 0 && (
+              <Badge className="absolute -top-2 -right-2 px-1 min-w-[20px] h-5 text-xs">
+                {notifications.length}
+              </Badge>
+            )}
+          </Button>
         </div>
+
+        {/* Notifications */}
+        {showNotifications && notifications.length > 0 && (
+          <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg max-w-2xl mx-auto mb-4">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="font-inter font-semibold text-blue-900">Уведомления</h3>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={() => setNotifications([])}
+              >
+                Очистить
+              </Button>
+            </div>
+            <div className="space-y-2">
+              {notifications.slice(0, 5).map((notification, index) => (
+                <div key={index} className="flex items-center gap-2 text-sm text-blue-800">
+                  <Icon name="Bell" size={14} />
+                  {notification}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Filters */}
         {showFilters && (
           <div className="bg-white p-4 rounded-lg border shadow-sm max-w-2xl mx-auto space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
                 <Label className="text-sm font-medium mb-2 block">Цена (₽)</Label>
                 <div className="px-2">
@@ -181,6 +285,21 @@ const Index = () => {
                   </SelectContent>
                 </Select>
               </div>
+              <div>
+                <Label className="text-sm font-medium mb-2 block">Сортировка</Label>
+                <Select value={sortBy} onValueChange={setSortBy}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="date-desc">По дате (новые)</SelectItem>
+                    <SelectItem value="date-asc">По дате (старые)</SelectItem>
+                    <SelectItem value="price-asc">По цене (дешевле)</SelectItem>
+                    <SelectItem value="price-desc">По цене (дороже)</SelectItem>
+                    <SelectItem value="views-desc">По популярности</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
             <div className="flex gap-2">
               <Button 
@@ -190,6 +309,7 @@ const Index = () => {
                   setPriceRange([0, 500000]);
                   setSelectedRegion('all');
                   setSearchQuery('');
+                  setSortBy('date-desc');
                 }}
               >
                 Сбросить фильтры
@@ -267,9 +387,13 @@ const Index = () => {
                     </div>
                   </div>
                   <div className="flex gap-2 pt-2">
-                    <Button className="flex-1" size="sm">
-                      <Icon name="Phone" size={14} className="mr-1" />
-                      Позвонить
+                    <Button 
+                      className="flex-1" 
+                      size="sm"
+                      onClick={() => openDetailModal(listing)}
+                    >
+                      <Icon name="Eye" size={14} className="mr-1" />
+                      Подробнее
                     </Button>
                     <Button
                       variant="outline"
@@ -282,6 +406,10 @@ const Index = () => {
                         className={favorites.includes(listing.id) ? 'text-red-500 fill-current' : ''}
                       />
                     </Button>
+                  </div>
+                  <div className="flex items-center justify-between pt-2 text-xs text-gray-400">
+                    <span>Просмотров: {listing.views || 0}</span>
+                    <span>{new Date(listing.dateAdded).toLocaleDateString('ru-RU')}</span>
                   </div>
                 </div>
               </CardContent>
@@ -618,9 +746,13 @@ const Index = () => {
                             </div>
                           </div>
                           <div className="flex gap-2 pt-2">
-                            <Button className="flex-1" size="sm">
-                              <Icon name="Phone" size={14} className="mr-1" />
-                              Позвонить
+                            <Button 
+                              className="flex-1" 
+                              size="sm"
+                              onClick={() => openDetailModal(listing)}
+                            >
+                              <Icon name="Eye" size={14} className="mr-1" />
+                              Подробнее
                             </Button>
                             <Button
                               variant="outline"
@@ -646,6 +778,116 @@ const Index = () => {
           </TabsContent>
         </Tabs>
       </main>
+
+      {/* Detail Modal */}
+      {selectedListing && (
+        <Dialog open={!!selectedListing} onOpenChange={closeDetailModal}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle className="font-inter text-2xl flex items-center gap-2">
+                <div className="bg-white border-2 border-gray-800 px-3 py-1 rounded text-lg font-bold">
+                  {selectedListing.number} {selectedListing.region}
+                </div>
+                {selectedListing.featured && (
+                  <Badge className="bg-yellow-100 text-yellow-800">
+                    <Icon name="Star" size={14} className="mr-1" />
+                    VIP
+                  </Badge>
+                )}
+              </DialogTitle>
+            </DialogHeader>
+            
+            <div className="space-y-6">
+              {selectedListing.image && (
+                <div className="relative h-64 bg-gray-100 rounded-lg overflow-hidden">
+                  <img 
+                    src={selectedListing.image} 
+                    alt={`${selectedListing.number} ${selectedListing.region}`}
+                    className="w-full h-full object-cover"
+                  />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className={`absolute top-3 right-3 p-2 ${favorites.includes(selectedListing.id) ? 'bg-red-50 border-red-200' : 'bg-white/90'}`}
+                    onClick={() => toggleFavorite(selectedListing.id)}
+                  >
+                    <Icon 
+                      name="Heart" 
+                      size={16} 
+                      className={favorites.includes(selectedListing.id) ? 'text-red-500 fill-current' : 'text-gray-600'}
+                    />
+                  </Button>
+                </div>
+              )}
+              
+              <div className="grid grid-cols-2 gap-6">
+                <div>
+                  <h3 className="font-inter font-semibold text-lg mb-3">Информация</h3>
+                  <div className="space-y-3">
+                    <div className="text-3xl font-bold text-primary">
+                      {selectedListing.price.toLocaleString()} ₽
+                    </div>
+                    <div className="flex items-center gap-2 text-gray-600">
+                      <Icon name="MapPin" size={16} />
+                      Регион {selectedListing.region}
+                    </div>
+                    <div className="flex items-center gap-2 text-gray-600">
+                      <Icon name="Calendar" size={16} />
+                      {new Date(selectedListing.dateAdded).toLocaleDateString('ru-RU', { 
+                        year: 'numeric', 
+                        month: 'long', 
+                        day: 'numeric' 
+                      })}
+                    </div>
+                    <div className="flex items-center gap-2 text-gray-600">
+                      <Icon name="Eye" size={16} />
+                      {selectedListing.views || 0} просмотров
+                    </div>
+                    {selectedListing.category && (
+                      <Badge variant="outline" className="capitalize">
+                        {selectedListing.category === 'premium' ? 'Премиум' : 
+                         selectedListing.category === 'exclusive' ? 'Эксклюзив' : 
+                         'Стандарт'}
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+                
+                <div>
+                  <h3 className="font-inter font-semibold text-lg mb-3">Продавец</h3>
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <Icon name="User" size={16} className="text-gray-400" />
+                      <span className="font-medium">{selectedListing.seller}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Icon name="Phone" size={16} className="text-gray-400" />
+                      <span>{selectedListing.phone}</span>
+                    </div>
+                    <div className="space-y-2">
+                      <Button className="w-full">
+                        <Icon name="Phone" size={16} className="mr-2" />
+                        Позвонить
+                      </Button>
+                      <Button variant="outline" className="w-full">
+                        <Icon name="MessageCircle" size={16} className="mr-2" />
+                        Написать
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              <div>
+                <h3 className="font-inter font-semibold text-lg mb-3">Описание</h3>
+                <p className="font-opensans text-gray-700 leading-relaxed">
+                  {selectedListing.description}
+                </p>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
 
       {/* Footer */}
       <footer className="bg-gray-900 text-white py-8 mt-16">
